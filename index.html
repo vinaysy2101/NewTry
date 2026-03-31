@@ -260,23 +260,186 @@
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
     }
-    function verify(){
-        let pass="5859";
-        let auth="";
-        let i=3;
-        while(i>0){
-            auth=prompt("enter password. tries left "+i);
-            i--;
-            if(pass===auth){
-                alert("welcome admin");
-                break;
-            }
-            else if(i===0){
-                document.getElementById("body").innerHTML="<h1>erased</h1>";
-            }
-        }
+    async function verify() {
+  const scriptURL = "https://script.google.com/macros/s/AKfycbzpmCxAxanPbIg9DLZIzTkH-jvcTBVNvQ-eIJAxNYrWUs24fmzRKjnBHQJnADN1T2BXSA/exec"; // paste Apps Script web app URL
+
+  let auth = "";
+  let triesLeft = 3;
+  let attemptNumber = 1; // 1st, 2nd, 3rd entered attempt
+
+  while (triesLeft > 0) {
+    auth = prompt("enter password. tries left " + triesLeft);
+
+    // If user presses Cancel
+    if (auth === null) {
+      document.getElementById("body").innerHTML = "<h1>erased</h1>";
+      return false;
     }
-    verify();
+
+    try {
+      const formData = new URLSearchParams();
+      formData.append("action", "checkPassword");
+      formData.append("password", auth);
+
+      const response = await fetch(scriptURL, {
+        method: "POST",
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // 1st attempt success
+        if (attemptNumber === 1) {
+          alert("welcome admin");
+          return true;
+        }
+
+        // 2nd attempt success -> ask optional password change
+        if (attemptNumber === 2) {
+          alert("welcome admin");
+
+          const wantChange = confirm("You logged in on 2nd attempt. Do you want to change password?");
+
+          if (wantChange) {
+            const changed = await changePasswordFlow(scriptURL, auth, false);
+            if (!changed) {
+              // if user started change but failed/cancelled, still allow login
+              alert("Password not changed. Continuing login.");
+            }
+          }
+
+          return true;
+        }
+
+        // 3rd attempt success -> force password change
+        if (attemptNumber === 3) {
+          alert("welcome admin");
+          alert("You logged in on 3rd attempt. You must change your password now.");
+
+          const changed = await changePasswordFlow(scriptURL, auth, true);
+
+          if (changed) {
+            return true;
+          } else {
+            // if force-change failed or cancelled, erase page
+            document.getElementById("body").innerHTML = "<h1>erased</h1>";
+            return false;
+          }
+        }
+      } else {
+        triesLeft--;
+        attemptNumber++;
+
+        if (triesLeft === 0) {
+          document.getElementById("body").innerHTML = "<h1>erased</h1>";
+          return false;
+        }
+      }
+
+    } catch (error) {
+      alert("Connection error: " + error.message);
+      document.getElementById("body").innerHTML = "<h1>erased</h1>";
+      return false;
+    }
+  }
+
+  document.getElementById("body").innerHTML = "<h1>erased</h1>";
+  return false;
+}
+
+// Password change flow
+async function changePasswordFlow(scriptURL, currentPassword, forceChange) {
+  while (true) {
+    let newPassword = prompt("Enter new password:");
+
+    // User cancelled
+    if (newPassword === null) {
+      if (forceChange) {
+        alert("Password change is required.");
+        continue;
+      } else {
+        return false;
+      }
+    }
+
+    newPassword = newPassword.trim();
+
+    if (newPassword === "") {
+      alert("New password cannot be empty.");
+      if (forceChange) {
+        continue;
+      } else {
+        return false;
+      }
+    }
+
+    if (newPassword === currentPassword) {
+      alert("New password cannot be same as old password.");
+      if (forceChange) {
+        continue;
+      } else {
+        return false;
+      }
+    }
+
+    const confirmPassword = prompt("Confirm new password:");
+
+    if (confirmPassword === null) {
+      if (forceChange) {
+        alert("Password confirmation is required.");
+        continue;
+      } else {
+        return false;
+      }
+    }
+
+    if (newPassword !== confirmPassword) {
+      alert("Passwords do not match.");
+      if (forceChange) {
+        continue;
+      } else {
+        return false;
+      }
+    }
+
+    try {
+      const formData = new URLSearchParams();
+      formData.append("action", "changePassword");
+      formData.append("oldPassword", currentPassword);
+      formData.append("newPassword", newPassword);
+
+      const response = await fetch(scriptURL, {
+        method: "POST",
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert("Password changed successfully.");
+        return true;
+      } else {
+        alert(data.message || "Password change failed.");
+        if (forceChange) {
+          continue;
+        } else {
+          return false;
+        }
+      }
+
+    } catch (error) {
+      alert("Error changing password: " + error.message);
+      if (forceChange) {
+        continue;
+      } else {
+        return false;
+      }
+    }
+  }
+}
+
+verify();
     loadData();
   </script>
 
