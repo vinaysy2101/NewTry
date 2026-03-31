@@ -1,15 +1,284 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=divice-width, intial-scale=1.0">
-<style>
-  body{
-    text-align:center;
-    padding:10px;
-  }
-</style>
-<body>
-<h1>Hello World!"</h1>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bricks Admin Panel</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+
+    h1 {
+      text-align: center;
+    }
+
+    .top-bar {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    button {
+      padding: 8px 14px;
+      margin: 4px;
+      cursor: pointer;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      overflow-x: auto;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #333;
+      color: white;
+    }
+
+    input, textarea {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 6px;
+    }
+
+    .action-btns button {
+      display: block;
+      margin-bottom: 5px;
+      width: 100%;
+    }
+
+    #status {
+      text-align: center;
+      font-weight: bold;
+      margin: 10px 0;
+    }
+
+    @media (max-width: 900px) {
+      table {
+        font-size: 12px;
+      }
+    }
+  </style>
+</head>
+<body id="body">
+
+  <h1>Bricks Admin Panel</h1>
+
+  <div class="top-bar">
+    <button onclick="loadData()">🔄 Refresh Data</button>
+    <button onclick="addNewRow()">➕ Add New Row</button>
+  </div>
+
+  <p id="status">Loading...</p>
+
+  <div style="overflow-x:auto;">
+    <table id="dataTable">
+      <thead>
+        <tr>
+          <th>Row</th>
+          <th>Timestamp</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Area</th>
+          <th>Quantity</th>
+          <th>Message</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    const scriptURL = "https://script.google.com/macros/s/AKfycbw5PMs-DIShd87hArHtTRr6-QAcL8U3Dqyz22zZn3hMGS8EVJyoNhfDu4nDIgcvoUMdTg/exec";
+
+    async function loadData() {
+      document.getElementById("status").textContent = "Loading data...";
+
+      try {
+        const response = await fetch(scriptURL + "?action=read");
+        const result = await response.json();
+
+        if (result.status === "success") {
+          renderTable(result.data);
+          document.getElementById("status").textContent = "Data loaded successfully!";
+        } else {
+          document.getElementById("status").textContent = "Error loading data.";
+        }
+      } catch (error) {
+        console.error(error);
+        document.getElementById("status").textContent = "Failed to load data.";
+      }
+    }
+
+    function renderTable(data) {
+      const tbody = document.querySelector("#dataTable tbody");
+      tbody.innerHTML = "";
+
+      data.forEach(row => {
+        const tr = document.createElement("tr");
+
+        tr.innerHTML = `
+          <td>${row.rowNumber}</td>
+          <td>${row.timestamp}</td>
+          <td><input type="text" value="${escapeHtml(row.name)}" id="name-${row.rowNumber}"></td>
+          <td><input type="text" value="${escapeHtml(row.email)}" id="email-${row.rowNumber}"></td>
+          <td><input type="text" value="${escapeHtml(row.phone)}" id="phone-${row.rowNumber}"></td>
+          <td><textarea id="area-${row.rowNumber}">${escapeHtml(row.address)}</textarea></td>
+          <td><input type="text" value="${escapeHtml(row.quantity)}" id="quantity-${row.rowNumber}"></td>
+          <td><textarea id="message-${row.rowNumber}">${escapeHtml(row.message)}</textarea></td>
+          <td class="action-btns">
+            <button onclick="updateRow(${row.rowNumber})">💾 Save</button>
+            <button onclick="deleteRow(${row.rowNumber})">🗑 Delete</button>
+          </td>
+        `;
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function updateRow(rowNumber) {
+      const formData = new FormData();
+      formData.append("action", "update");
+      formData.append("rowNumber", rowNumber);
+      formData.append("name", document.getElementById(`name-${rowNumber}`).value);
+      formData.append("email", document.getElementById(`email-${rowNumber}`).value);
+      formData.append("phone", document.getElementById(`phone-${rowNumber}`).value);
+      formData.append("address", document.getElementById(`area-${rowNumber}`).value);
+      formData.append("quantity", document.getElementById(`quantity-${rowNumber}`).value);
+      formData.append("message", document.getElementById(`message-${rowNumber}`).value);
+
+      document.getElementById("status").textContent = `Updating row ${rowNumber}...`;
+
+      try {
+        const response = await fetch(scriptURL, {
+          method: "POST",
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.status === "success") {
+          document.getElementById("status").textContent = `Row ${rowNumber} updated successfully!`;
+          loadData();
+        } else {
+          document.getElementById("status").textContent = "Update failed: " + result.message;
+        }
+      } catch (error) {
+        console.error(error);
+        document.getElementById("status").textContent = "Update request failed.";
+      }
+    }
+
+    async function deleteRow(rowNumber) {
+      if (!confirm(`Delete row ${rowNumber}?`)) return;
+
+      const formData = new FormData();
+      formData.append("action", "delete");
+      formData.append("rowNumber", rowNumber);
+
+      document.getElementById("status").textContent = `Deleting row ${rowNumber}...`;
+
+      try {
+        const response = await fetch(scriptURL, {
+          method: "POST",
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.status === "success") {
+          document.getElementById("status").textContent = `Row ${rowNumber} deleted successfully!`;
+          loadData();
+        } else {
+          document.getElementById("status").textContent = "Delete failed: " + result.message;
+        }
+      } catch (error) {
+        console.error(error);
+        document.getElementById("status").textContent = "Delete request failed.";
+      }
+    }
+
+    async function addNewRow() {
+      const name = prompt("Enter Name:");
+      if (name === null) return;
+
+      const email = prompt("Enter Email:") || "";
+      const phone = prompt("Enter Phone:") || "";
+      const area = prompt("Enter Area:") || "";
+      const quantity = prompt("Enter Quantity:") || "";
+      const message = prompt("Enter Message:") || "";
+
+      const formData = new FormData();
+      formData.append("action", "add");
+      formData.append("name", name);
+      formData.append("email", email);
+      formData.append("phone", phone);
+      formData.append("address", area);
+      formData.append("quantity", quantity);
+      formData.append("message", message);
+
+      document.getElementById("status").textContent = "Adding new row...";
+
+      try {
+        const response = await fetch(scriptURL, {
+          method: "POST",
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.status === "success") {
+          document.getElementById("status").textContent = "New row added successfully!";
+          loadData();
+        } else {
+          document.getElementById("status").textContent = "Add failed: " + result.message;
+        }
+      } catch (error) {
+        console.error(error);
+        document.getElementById("status").textContent = "Add request failed.";
+      }
+    }
+
+    function escapeHtml(value) {
+      if (value === null || value === undefined) return "";
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+    function verify(){
+        let pass="5859";
+        let auth="";
+        let i=3;
+        while(i>0){
+            auth=prompt("enter password. tries left "+i);
+            i--;
+            if(pass===auth){
+                alert("welcome admin");
+                break;
+            }
+            else if(i===0){
+                document.getElementById("body").innerHTML="<h1>erased</h1>";
+            }
+        }
+    }
+    verify();
+    loadData();
+  </script>
+
 </body>
 </html>
